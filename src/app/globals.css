@@ -1,26 +1,177 @@
 @import "tailwindcss";
+@source "../**/*.{js,ts,jsx,tsx,mdx}";
 
+/* Nudg visual system: editorial paper, ink, and one clear signal. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f7f6f2;
+  --foreground: #171714;
+  --card: #ffffff;
+  --card-foreground: #171714;
+  --popover: #ffffff;
+  --popover-foreground: #111215;
+  --primary: #171714;
+  --primary-foreground: #f7f6f2;
+  --accent: #e65332;
+  --accent-foreground: #ffffff;
+  --secondary: #eeede8;
+  --secondary-foreground: #171714;
+  --muted: #eeede8;
+  --muted-foreground: #70706b;
+  --border: #dfded7;
+  --input: #dfded7;
+  --ring: #e65332;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --destructive: #e11d48;
+  --destructive-foreground: #ffffff;
+  --grid-pattern: rgba(23, 23, 20, 0.05);
+}
+
+/* ── Dark theme: Deep matte obsidian & luminous signal ink ── */
+.dark {
+  --background: #111210;
+  --foreground: #f2f0e9;
+  --card: #1a1b18;
+  --card-foreground: #f2f0e9;
+  --popover: #1a1b18;
+  --popover-foreground: #f2f0e9;
+  --primary: #f2f0e9;
+  --primary-foreground: #111210;
+  --accent: #ff7654;
+  --accent-foreground: #111210;
+  --secondary: #232420;
+  --secondary-foreground: #f2f0e9;
+  --muted: #232420;
+  --muted-foreground: #9c9b92;
+  --border: #30312c;
+  --input: #30312c;
+  --ring: #ff7654;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --destructive: #f43f5e;
+  --destructive-foreground: #ffffff;
+  --grid-pattern: rgba(255, 255, 255, 0.045);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ── Base resets & tactile feel ── */
+* {
+  border-color: var(--border);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  letter-spacing: -0.015em;
+}
+
+button, a, input, textarea { -webkit-tap-highlight-color: transparent; }
+button, a { transition: color .2s ease, background-color .2s ease, border-color .2s ease, transform .2s ease, opacity .2s ease; }
+html.theme-changing,
+html.theme-changing body,
+html.theme-changing body * {
+  transition-property: color, background-color, border-color, box-shadow, fill, stroke !important;
+  transition-duration: 360ms !important;
+  transition-timing-function: cubic-bezier(.22, 1, .36, 1) !important;
+}
+
+::view-transition-old(root) { animation: theme-old .24s ease both; }
+::view-transition-new(root) { animation: theme-new .4s cubic-bezier(.22, 1, .36, 1) both; }
+@keyframes theme-old { to { opacity: 0; } }
+@keyframes theme-new { from { opacity: .72; } to { opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  html.theme-changing, html.theme-changing body, html.theme-changing body * { transition-duration: 0ms !important; }
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+}
+.glass { background: color-mix(in srgb, var(--card) 82%, transparent); backdrop-filter: blur(18px); }
+.glow { box-shadow: 0 24px 80px -30px color-mix(in srgb, var(--accent) 35%, transparent); }
+.gradient-text { color: var(--accent); }
+
+/* Subtle editorial dot matrix texture */
+.bg-grid {
+  background-size: 24px 24px;
+  background-image: radial-gradient(circle, var(--grid-pattern) 1px, transparent 1px);
+}
+
+/* Tactile craft card */
+.craft-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 8px 24px -10px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dark .craft-card {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.craft-card:hover {
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+
+/* Tactile physical button feel */
+.btn-press {
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+.btn-press:active {
+  transform: scale(0.98);
+}
+
+/* Monospace label pills */
+.badge-mono {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Custom minimal scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
+
+::selection {
+  background: var(--accent);
+  color: #ffffff;
 }
