@@ -1,4 +1,7 @@
 import nodemailer from "nodemailer";
+import { createTelegramWebhookSecret } from "@/lib/event-actions";
+
+const configuredTelegramWebhooks = new Set<string>();
 
 export interface NotificationPayload {
   to: string; // email, chat_id, webhook_url, or phone number
@@ -12,6 +15,9 @@ export interface NotificationPayload {
   project?: string;
   location?: string;
   manageUrl?: string;
+  telegramWebhookUrl?: string;
+  telegramAttendCallback?: string;
+  telegramCancelCallback?: string;
 }
 
 function formatReminderTime(isoTime: string, timezone?: string) {
@@ -95,7 +101,25 @@ export async function sendTelegramReminder(payload: NotificationPayload) {
     return { success: false, error: "Telegram not configured" };
   }
 
-  const messageText = ["NUDG · EVENT REMINDER", "", payload.title, payload.description, `Time: ${formatReminderTime(payload.startTime, payload.timezone)}`, payload.priority && `Priority: ${payload.priority}`, payload.category && `Category: ${payload.category}`, payload.organization && `Organization: ${payload.organization}`, payload.project && `Project: ${payload.project}`, payload.location && `Location: ${payload.location}`, payload.manageUrl && "Use the button below to mark this event complete or cancel it."].filter(Boolean).join("\n");
+  let callbackActionsReady = false;
+  if (payload.telegramWebhookUrl && payload.telegramAttendCallback && payload.telegramCancelCallback && process.env.CRON_SECRET) {
+    try {
+      if (!configuredTelegramWebhooks.has(payload.telegramWebhookUrl)) {
+        const setup = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: payload.telegramWebhookUrl, secret_token: createTelegramWebhookSecret(), allowed_updates: ["callback_query"] }),
+        });
+        const setupResult = await setup.json();
+        if (!setup.ok || !setupResult.ok) throw new Error(setupResult.description || "Could not configure Telegram event buttons.");
+        configuredTelegramWebhooks.add(payload.telegramWebhookUrl);
+      }
+      callbackActionsReady = true;
+    } catch (error) {
+      console.error("Telegram webhook setup failed; using secure event action links:", error instanceof Error ? error.message : error);
+    }
+  }
+
+  const messageText = ["NUDG · EVENT REMINDER", "", payload.title, payload.description, `Time: ${formatReminderTime(payload.startTime, payload.timezone)}`, payload.priority && `Priority: ${payload.priority}`, payload.category && `Category: ${payload.category}`, payload.organization && `Organization: ${payload.organization}`, payload.project && `Project: ${payload.project}`, payload.location && `Location: ${payload.location}`, "Choose Attend or Cancel to update this event. Reminders repeat every 5 minutes until you respond."].filter(Boolean).join("\n");
 
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -104,7 +128,9 @@ export async function sendTelegramReminder(payload: NotificationPayload) {
       body: JSON.stringify({
         chat_id: payload.to,
         text: messageText,
-        ...(payload.manageUrl ? { reply_markup: { inline_keyboard: [[{ text: "Manage event", url: payload.manageUrl }]] } } : {}),
+        reply_markup: { inline_keyboard: callbackActionsReady
+          ? [[{ text: "✅ Attend", callback_data: payload.telegramAttendCallback! }, { text: "✖ Cancel", callback_data: payload.telegramCancelCallback! }]]
+          : payload.manageUrl ? [[{ text: "✅ Attend", url: actionUrl(payload.manageUrl, "attended") }, { text: "✖ Cancel", url: actionUrl(payload.manageUrl, "cancelled") }]] : [] },
       }),
     });
 
@@ -114,6 +140,12 @@ export async function sendTelegramReminder(payload: NotificationPayload) {
     console.error("Telegram send error:", error);
     return { success: false, error: error instanceof Error ? error.message : "Telegram delivery failed." };
   }
+}
+
+function actionUrl(manageUrl: string, status: "attended" | "cancelled") {
+  const url = new URL(manageUrl);
+  url.searchParams.set("action", status);
+  return url.toString();
 }
 
 // 3. Discord via Webhook (100% Free)

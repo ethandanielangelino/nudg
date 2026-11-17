@@ -38,11 +38,11 @@ export async function GET(request: Request) {
 
   // Optional workflow fields are added by a later migration. Do not let a missing
   // reminder delivery column make the entire calendar disappear.
-  const visibleEvents = (data ?? []).filter((event) => event.status !== "cancelled");
+  const visibleEvents = data ?? [];
   const eventIds = visibleEvents.map((event) => event.id);
   if (!eventIds.length) return NextResponse.json({ events: [] });
   const { data: reminders, error: reminderError } = await supabase.from("reminders")
-    .select("event_id,channel_id,status,remind_at,sent_at").eq("user_id", user.id).in("event_id", eventIds);
+    .select("event_id,channel_id,status,remind_at,sent_at,repeat_until_action").eq("user_id", user.id).in("event_id", eventIds);
   if (reminderError) {
     console.warn("Reminder delivery details are unavailable; returning calendar events:", reminderError.message);
     return NextResponse.json({ events: visibleEvents.map((event) => ({ ...event, reminder_deliveries: [] })) });
@@ -59,7 +59,7 @@ export async function GET(request: Request) {
   const deliveriesByEvent = new Map<string, NonNullable<CalendarEvent["reminder_deliveries"]>>();
   for (const reminder of reminders ?? []) {
     const deliveries = deliveriesByEvent.get(reminder.event_id) ?? [];
-    deliveries.push({ channel_type: channelNames.get(reminder.channel_id) ?? "notification", status: reminder.status, remind_at: reminder.remind_at, sent_at: reminder.sent_at });
+    deliveries.push({ channel_type: channelNames.get(reminder.channel_id) ?? "notification", status: reminder.status, remind_at: reminder.remind_at, sent_at: reminder.sent_at, repeat_until_action: reminder.repeat_until_action });
     deliveriesByEvent.set(reminder.event_id, deliveries);
   }
   return NextResponse.json({ events: visibleEvents.map((event) => ({ ...event, reminder_deliveries: deliveriesByEvent.get(event.id) ?? [] })) });

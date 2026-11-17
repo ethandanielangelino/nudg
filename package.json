@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "node --env-file=.env.local scripts/dev-with-reminders.mjs",
     "dev:next": "next dev",
+    "reminders:poll": "node --env-file=.env.local scripts/poll-reminders.mjs",
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint"

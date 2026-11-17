@@ -52,7 +52,8 @@
 5. Run `supabase/professional-events-migration.sql` in the SQL Editor. It adds event priority, category, organization, project, and per-event reminder timing. Events set to “Use account default” continue to follow your reminder preference.
 6. Run `supabase/event-actions-migration.sql` in the SQL Editor. It enables reminder links to mark an event attended, completed, or cancelled, and records reminder delivery time.
 7. Run `supabase/reminder-delivery-migration.sql`. This safely upgrades the status options and adds per-channel delivery timestamps, whether or not step 6 was run earlier.
-8. Go to **Project Settings -> API** to copy:
+8. Run `supabase/attendance-reminder-migration.sql`. This adds the `attended_late` event status and enables Telegram reminders to repeat every five minutes until the user marks the event attended or cancelled.
+9. Go to **Project Settings -> API** to copy:
    - `Project URL`
    - `publishable key` (never use a `secret` key in browser config)
 
@@ -104,6 +105,8 @@ WHATSAPP_TEMPLATE_LANGUAGE=en_US
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
+Telegram attendance buttons use a secure bot callback. In production, set `NEXT_PUBLIC_APP_URL` to the public HTTPS URL for this app; Nudg configures the callback endpoint when it sends the first Telegram reminder.
+
 ### 3. Run the Development Server
 ```bash
 npm run dev
@@ -112,7 +115,7 @@ Open [http://localhost:3000](http://localhost:3000) to see your app live!
 
 Chat keeps a private per-user conversation history and rolling memory summary. Reminder messages include a signed event-management link. Email, Telegram, and Discord display a **Manage event** button; WhatsApp displays a clickable link, and an approved WhatsApp template can render it as a URL button by setting `WHATSAPP_TEMPLATE_MANAGE_BUTTON_INDEX` to the template button index. Set `NEXT_PUBLIC_APP_URL` to the deployed site URL for production links.
 
-Production reminder delivery runs through the Vercel Cron schedule in `vercel.json` (once per minute). Add `CRON_SECRET`, `SUPABASE_SECRET_KEY`, and the same `CHANNEL_CONFIG_ENCRYPTION_KEY` to the deployment environment. Local development does not run Vercel Cron automatically.
+Production reminder delivery runs through the Vercel Cron schedule in `vercel.json`. Add `CRON_SECRET`, `SUPABASE_SECRET_KEY`, and the same `CHANNEL_CONFIG_ENCRYPTION_KEY` to the deployment environment. Vercel Hobby cron jobs run at most once per day, so use `supabase/schedule-reminder-cron.sql` with Supabase Cron for minute-level reminders on Hobby. Local development uses the poller in `npm run dev` and requires `CRON_SECRET` and `SUPABASE_SECRET_KEY` in `.env.local`.
 
 ---
 

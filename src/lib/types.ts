@@ -25,12 +25,13 @@ export interface CalendarEvent {
   organization: string | null;
   project: string | null;
   reminder_lead_minutes: number | null;
-  status?: "scheduled" | "attended" | "completed" | "cancelled";
+  status?: "scheduled" | "attended" | "attended_late" | "completed" | "cancelled";
   reminder_deliveries?: Array<{
     channel_type: string;
     status: "pending" | "processing" | "sent" | "failed";
     remind_at: string;
     sent_at: string | null;
+    repeat_until_action?: boolean;
   }>;
   created_at: string;
   updated_at: string;

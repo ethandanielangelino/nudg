@@ -18,6 +18,11 @@ import { createClient } from "@/lib/supabase/client";
 import { CalendarEvent } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+function statusLabel(status?: CalendarEvent["status"]) {
+  if (status === "attended_late") return "Attended late";
+  return (status || "scheduled").replaceAll("_", " ").replace(/^\w/, (letter) => letter.toUpperCase());
+}
+
 export default function DashboardPage() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [eventsError, setEventsError] = useState<string | null>(null);
@@ -114,7 +119,7 @@ export default function DashboardPage() {
   // Filter today's and upcoming events
   const todayEvents = events.filter((ev) => {
     try {
-      return isToday(parseISO(ev.start_time));
+      return ev.status !== "cancelled" && isToday(parseISO(ev.start_time));
     } catch {
       return false;
     }
@@ -122,12 +127,12 @@ export default function DashboardPage() {
 
   const upcomingEvents = events.filter((ev) => {
     try {
-      return new Date(ev.start_time) > new Date() && new Date(ev.start_time) <= endOfWeek(new Date()) && !isToday(parseISO(ev.start_time));
+      return ev.status !== "cancelled" && new Date(ev.start_time) > new Date() && new Date(ev.start_time) <= endOfWeek(new Date()) && !isToday(parseISO(ev.start_time));
     } catch {
       return false;
     }
   }).slice(0, 5);
-  const futureEventCount = events.filter((ev) => new Date(ev.start_time) > new Date()).length;
+  const futureEventCount = events.filter((ev) => ev.status !== "cancelled" && new Date(ev.start_time) > new Date()).length;
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -299,6 +304,7 @@ export default function DashboardPage() {
                         </span>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
+                        <span className={cn("rounded-full px-2 py-1", ev.status === "attended_late" ? "bg-amber-500/10 text-amber-700 dark:text-amber-300" : ev.status === "attended" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-secondary")}>{statusLabel(ev.status)}</span>
                         <span className="rounded-full bg-secondary px-2 py-1 capitalize">{ev.priority ?? "normal"} priority</span>
                         <span className="rounded-full bg-secondary px-2 py-1 capitalize">{ev.category ?? "general"}</span>
                         {ev.organization && <span className="rounded-full bg-secondary px-2 py-1">{ev.organization}</span>}
@@ -359,7 +365,7 @@ export default function DashboardPage() {
                       <p className="text-[10px] text-muted-foreground font-mono mt-0.5">
                         {format(parseISO(ev.start_time), "EEE, MMM d • p")}
                       </p>
-                      <div className="mt-1 flex flex-wrap gap-1">{[ev.priority ? `${ev.priority} priority` : "normal priority", ev.category || "general", ev.organization, ev.project, ev.location, `Reminder: ${ev.reminder_lead_minutes == null ? "account default" : ev.reminder_lead_minutes === 0 ? "at start" : ev.reminder_lead_minutes >= 1440 ? `${ev.reminder_lead_minutes / 1440} day(s) before` : ev.reminder_lead_minutes >= 60 ? `${ev.reminder_lead_minutes / 60} hour(s) before` : `${ev.reminder_lead_minutes} min before`}`].filter(Boolean).map((detail) => <span key={detail} className="rounded bg-secondary px-1.5 py-0.5 text-[9px] capitalize">{detail}</span>)}</div>
+                      <div className="mt-1 flex flex-wrap gap-1">{[statusLabel(ev.status), ev.priority ? `${ev.priority} priority` : "normal priority", ev.category || "general", ev.organization, ev.project, ev.location, `Reminder: ${ev.reminder_lead_minutes == null ? "account default" : ev.reminder_lead_minutes === 0 ? "at start" : ev.reminder_lead_minutes >= 1440 ? `${ev.reminder_lead_minutes / 1440} day(s) before` : ev.reminder_lead_minutes >= 60 ? `${ev.reminder_lead_minutes / 60} hour(s) before` : `${ev.reminder_lead_minutes} min before`}`].filter(Boolean).map((detail) => <span key={detail} className="rounded bg-secondary px-1.5 py-0.5 text-[9px] capitalize">{detail}</span>)}</div>
                     </div>
                   </div>
                 ))

@@ -27,3 +27,30 @@ export function verifyEventActionToken(token: string): ActionToken | null {
     return decoded;
   } catch { return null; }
 }
+
+function telegramSecret() {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) throw new Error("CRON_SECRET is required to secure Telegram event buttons.");
+  return secret;
+}
+
+export function createTelegramEventAction(eventId: string, status: "attended" | "cancelled") {
+  const actionCode = status === "attended" ? "a" : "c";
+  const signature = createHmac("sha256", telegramSecret()).update(`${eventId}:${actionCode}`).digest("hex").slice(0, 22);
+  return `e:${eventId}:${actionCode}:${signature}`;
+}
+
+export function verifyTelegramEventAction(value: string) {
+  const match = value.match(/^e:([0-9a-f-]{36}):(a|c):([0-9a-f]{22})$/i);
+  if (!match) return null;
+  const [, eventId, actionCode, signature] = match;
+  const expected = createHmac("sha256", telegramSecret()).update(`${eventId}:${actionCode}`).digest("hex").slice(0, 22);
+  const actualBuffer = Buffer.from(signature, "hex");
+  const expectedBuffer = Buffer.from(expected, "hex");
+  if (actualBuffer.length !== expectedBuffer.length || !timingSafeEqual(actualBuffer, expectedBuffer)) return null;
+  return { eventId, status: actionCode === "a" ? "attended" as const : "cancelled" as const };
+}
+
+export function createTelegramWebhookSecret() {
+  return createHmac("sha256", telegramSecret()).update("nudg-telegram-webhook-v1").digest("hex");
+}

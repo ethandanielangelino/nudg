@@ -4,7 +4,9 @@ import { randomUUID } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
 import { scheduleEventReminders } from "@/lib/reminders";
 
-const FALLBACK_MODELS = ["gemini-3.8-flash"];
+// Keep independent stable Flash endpoints in the failover pool. The model set
+// is intentionally small so a transient outage does not leave chat hanging.
+const FALLBACK_MODELS = ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.5-flash-lite"];
 
 function requestedLocalDate(message: string, timezone: string, now: Date) {
   const lower = message.toLowerCase();
@@ -68,14 +70,18 @@ function getGeminiStatus(error: unknown) {
 function shouldTryFallback(error: unknown) {
   const status = getGeminiStatus(error);
   const rawMessage = error instanceof Error ? error.message : String(error);
-  return status === 404 || /model .*not available|model .*not found|no longer available/i.test(rawMessage);
+  if (status === 404 || /model .*not available|model .*not found|no longer available/i.test(rawMessage)) return true;
+  if (status === 503 || /temporarily overloaded|service unavailable|high demand/i.test(rawMessage)) return true;
+  // A model-specific rate limit can clear on another endpoint. Daily/project
+  // quota exhaustion cannot, so do not waste more requests in that case.
+  return status === 429 && /rate.?limit|too many requests|resource_exhausted/i.test(rawMessage) && !/quota.?exceeded|daily quota/i.test(rawMessage);
 }
 
 function describeGeminiError(error: unknown, model: string) {
   const rawMessage = error instanceof Error ? error.message : String(error);
   const status = getGeminiStatus(error);
   if (status === 503 || /high demand|temporarily overloaded/i.test(rawMessage)) {
-    return "Gemini is temporarily overloaded, including Nudg’s backup models. Please try again shortly. No event was created.";
+    return "Gemini is temporarily overloaded across the available models. Please try again shortly. Your message is saved, and no calendar changes were made.";
   }
   if (status === 429) {
     return "Gemini’s request limit or quota has been reached across Nudg’s available models. Please check your AI Studio limits or try again later. No event was created.";
@@ -320,7 +326,7 @@ export async function POST(request: Request) {
           apiKey,
           // The SDK retries quota/overload errors five times by default, with backoff up to 60s.
           // Chat should return a clear retryable error promptly instead of appearing frozen.
-          httpOptions: { timeout: 18_000, retryOptions: { attempts: 1 } },
+          httpOptions: { timeout: 12_000, retryOptions: { attempts: 1 } },
         });
 
         const systemPrompt = `You are Nudg, an intelligent, personal scheduling assistant.
@@ -368,7 +374,7 @@ When asked to edit or delete an event, match it against the user's event list by
           { role: "user", parts: [{ text: message }] },
         ];
 
-        const models = [...new Set([model, ...FALLBACK_MODELS])].slice(0, 2);
+        const models = [...new Set([model, ...FALLBACK_MODELS])];
         let responseText: string | undefined;
         let generationSucceeded = false;
         let lastModelError: unknown;
@@ -395,7 +401,7 @@ When asked to edit or delete an event, match it against the user's event list by
       } catch (geminiError) {
         console.error("Gemini API call failed:", geminiError);
         const errorMessage = describeGeminiError(geminiError, model);
-        assistantReply = `I ran into an issue connecting to my AI brain: ${errorMessage}. Let me still assist you!`;
+        assistantReply = `I couldn’t reach the AI assistant: ${errorMessage}`;
       }
     } else {
       // Never invent an event time when the AI provider is not configured.
