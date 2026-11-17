@@ -157,7 +157,8 @@ export async function GET(request: Request) {
           }
           sent += 1;
         } else {
-          throw new Error(result.error || "Notification provider rejected the message.");
+          const providerError = "error" in result && typeof result.error === "string" ? result.error : undefined;
+          throw new Error(providerError || "Notification provider rejected the message.");
         }
       } catch (error) {
         const attempts = reminder.attempts + 1;

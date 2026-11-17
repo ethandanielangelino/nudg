@@ -102,16 +102,19 @@ export async function sendTelegramReminder(payload: NotificationPayload) {
   }
 
   let callbackActionsReady = false;
-  if (payload.telegramWebhookUrl && payload.telegramAttendCallback && payload.telegramCancelCallback && process.env.CRON_SECRET) {
+  const webhookUrl = payload.telegramWebhookUrl;
+  const publicManageUrl = payload.manageUrl && new URL(payload.manageUrl).protocol === "https:";
+  const publicWebhookUrl = webhookUrl && new URL(webhookUrl).protocol === "https:";
+  if (webhookUrl && publicWebhookUrl && payload.telegramAttendCallback && payload.telegramCancelCallback && process.env.CRON_SECRET) {
     try {
-      if (!configuredTelegramWebhooks.has(payload.telegramWebhookUrl)) {
+      if (!configuredTelegramWebhooks.has(webhookUrl)) {
         const setup = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: payload.telegramWebhookUrl, secret_token: createTelegramWebhookSecret(), allowed_updates: ["callback_query"] }),
+          body: JSON.stringify({ url: webhookUrl, secret_token: createTelegramWebhookSecret(), allowed_updates: ["callback_query"] }),
         });
         const setupResult = await setup.json();
         if (!setup.ok || !setupResult.ok) throw new Error(setupResult.description || "Could not configure Telegram event buttons.");
-        configuredTelegramWebhooks.add(payload.telegramWebhookUrl);
+        configuredTelegramWebhooks.add(webhookUrl);
       }
       callbackActionsReady = true;
     } catch (error) {
@@ -119,7 +122,8 @@ export async function sendTelegramReminder(payload: NotificationPayload) {
     }
   }
 
-  const messageText = ["NUDG · EVENT REMINDER", "", payload.title, payload.description, `Time: ${formatReminderTime(payload.startTime, payload.timezone)}`, payload.priority && `Priority: ${payload.priority}`, payload.category && `Category: ${payload.category}`, payload.organization && `Organization: ${payload.organization}`, payload.project && `Project: ${payload.project}`, payload.location && `Location: ${payload.location}`, "Choose Attend or Cancel to update this event. Reminders repeat every 5 minutes until you respond."].filter(Boolean).join("\n");
+  const hasActions = callbackActionsReady || Boolean(publicManageUrl);
+  const messageText = ["NUDG · EVENT REMINDER", "", payload.title, payload.description, `Time: ${formatReminderTime(payload.startTime, payload.timezone)}`, payload.priority && `Priority: ${payload.priority}`, payload.category && `Category: ${payload.category}`, payload.organization && `Organization: ${payload.organization}`, payload.project && `Project: ${payload.project}`, payload.location && `Location: ${payload.location}`, hasActions ? "Choose Attend or Cancel to update this event. Reminders repeat every 5 minutes until you respond." : "Open Nudg to update this event."].filter(Boolean).join("\n");
 
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -128,14 +132,16 @@ export async function sendTelegramReminder(payload: NotificationPayload) {
       body: JSON.stringify({
         chat_id: payload.to,
         text: messageText,
-        reply_markup: { inline_keyboard: callbackActionsReady
-          ? [[{ text: "✅ Attend", callback_data: payload.telegramAttendCallback! }, { text: "✖ Cancel", callback_data: payload.telegramCancelCallback! }]]
-          : payload.manageUrl ? [[{ text: "✅ Attend", url: actionUrl(payload.manageUrl, "attended") }, { text: "✖ Cancel", url: actionUrl(payload.manageUrl, "cancelled") }]] : [] },
+        ...(callbackActionsReady || publicManageUrl ? {
+          reply_markup: { inline_keyboard: callbackActionsReady
+            ? [[{ text: "✅ Attend", callback_data: payload.telegramAttendCallback! }, { text: "✖ Cancel", callback_data: payload.telegramCancelCallback! }]]
+            : [[{ text: "✅ Attend", url: actionUrl(payload.manageUrl!, "attended") }, { text: "✖ Cancel", url: actionUrl(payload.manageUrl!, "cancelled") }]] },
+        } : {}),
       }),
     });
 
     const data = await res.json();
-    return { success: data.ok, data };
+    return { success: data.ok, error: data.ok ? undefined : data.description || `Telegram rejected the reminder (HTTP ${res.status}).`, data };
   } catch (error) {
     console.error("Telegram send error:", error);
     return { success: false, error: error instanceof Error ? error.message : "Telegram delivery failed." };
